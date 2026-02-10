@@ -1,0 +1,37 @@
+# --- Python General ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual Environments ---
+# It is crucial not to upload your venv
+venv/
+env/
+.venv/
+
+# --- Environment Variables ---
+# Never commit secrets/API keys
+.env
+
+# --- Django ---
+*.log
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+
+# --- IDE & Editor settings ---
+.vscode/
+.idea/
+
+# --- Operating System ---
+.DS_Store
+Thumbs.db
+
+# --- Frontend (Future proofing) ---
+# Since your screenshot showed a 'frontend' folder, 
+# keep these out if you add React/Vue later.
+node_modules/
+build/
+dist/
+.npm
