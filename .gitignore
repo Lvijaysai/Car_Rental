@@ -1,37 +1,35 @@
-# --- Python General ---
-__pycache__/
-*.py[cod]
-*$py.class
-
-# --- Virtual Environments ---
-# It is crucial not to upload your venv
+# --- Python & Django ---
+backend/venv/
+backend/env/
 venv/
 env/
-.venv/
-
-# --- Environment Variables ---
-# Never commit secrets/API keys
-.env
-
-# --- Django ---
-*.log
-local_settings.py
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 db.sqlite3
-media/
-staticfiles/
+.DS_Store
 
-# --- IDE & Editor settings ---
+# --- Security (CRITICAL) ---
+backend/.env
+.env
+*.pem
+*.key
+
+# --- User Media & Static ---
+backend/media/
+backend/staticfiles/
+
+# --- React / Node.js ---
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env
+frontend/.env.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# --- Editor / IDE Settings ---
 .vscode/
 .idea/
-
-# --- Operating System ---
-.DS_Store
-Thumbs.db
-
-# --- Frontend (Future proofing) ---
-# Since your screenshot showed a 'frontend' folder, 
-# keep these out if you add React/Vue later.
-node_modules/
-build/
-dist/
-.npm
