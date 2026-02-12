@@ -46,6 +46,7 @@ class CarViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Car.objects.all()
     serializer_class = CarSerializer
+    lookup_field = 'slug'
     
     def get_serializer_class(self):
         """Use lightweight serializer for list view"""

@@ -2,10 +2,12 @@ from django.shortcuts import render
 
 # Create your views here.
 #bookings/views.py
+from django.core.exceptions import ValidationError
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import MethodNotAllowed
 from django.db import transaction
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
@@ -32,7 +34,12 @@ class BookingViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status=status_filter)
         
         return queryset.order_by('-created_at')
-    
+    def create(self, request, *args, **kwargs):
+        raise MethodNotAllowed(
+            "POST",
+            detail="Standard creation is disabled. please use the /create/ endpoint to check availability."
+            
+        )
     def perform_create(self, serializer):
         """Create booking with availability check"""
         serializer.save(user=self.request.user)
@@ -63,13 +70,17 @@ class BookingViewSet(viewsets.ModelViewSet):
                     start_time = timezone.make_aware(serializer.validated_data['hourly_start'])
                     end_time = timezone.make_aware(serializer.validated_data['hourly_end'])
                 else:  # daily
-                    from datetime import datetime, time
+                    from datetime import datetime, time, timedelta  # <--- Make sure timedelta is imported
                     start_date = serializer.validated_data['daily_start']
                     end_date = serializer.validated_data['daily_end']
                     now_local = timezone.localtime(timezone.now())
                     
                     if start_date == now_local.date():
-                        start_dt = datetime.combine(start_date, now_local.time())
+                        # --- FIX START: Add 2 minute buffer ---
+                        # This prevents "Cannot book in past" error if code runs slow
+                        future_now = now_local + timedelta(minutes=2)
+                        start_dt = datetime.combine(start_date, future_now.time())
+                        # --- FIX END ---
                     else:
                         start_dt = datetime.combine(start_date, time(9, 0, 0))
                     
@@ -99,15 +110,13 @@ class BookingViewSet(viewsets.ModelViewSet):
             )
         
         except Car.DoesNotExist:
-            return Response(
-                {'error': 'Car not found.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({'error': 'Car not found.'}, status=status.HTTP_404_NOT_FOUND)
         except ValueError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        # --- FIX START: Catch the Validation Error ---
+        except ValidationError as e:
+            return Response({'error': e.messages}, status=status.HTTP_400_BAD_REQUEST)
+        # --- FIX END ---
     
     @action(detail=True, methods=['post'], url_path='cancel')
     def cancel_booking(self, request, pk=None):
