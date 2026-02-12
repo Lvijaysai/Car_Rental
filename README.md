@@ -22,7 +22,7 @@ A modern, full-stack car rental platform built with **Django REST Framework** an
 ### Backend
 * **Framework:** Django & Django REST Framework (DRF)
 * **Security:** `python-decouple` for environment variable management.
-* **Database:** SQLite (Development) / PostgreSQL (Production ready).
+* **Database:** MYSQL workbench 8.0 ce (Development) / PostgreSQL (Production ready).
 * **API:** RESTful API with Axios integration.
 
 ### Frontend
