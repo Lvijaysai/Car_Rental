@@ -1,10 +1,4 @@
-Here are the professional files you need for your GitHub repository.
 
-### 1. `README.md`
-
-Create a file named **`README.md`** in your root folder. This is the main documentation recruiters will see.
-
-```markdown
 # 🚗 Budget Car Rentals - Full Stack Application
 
 A modern, full-stack car rental platform built with **Django REST Framework** and **React (Vite)**. This application allows users to browse a vehicle fleet, make hourly or daily bookings, and manage their rental history, while providing administrators with a dashboard to manage cars and reservations.
