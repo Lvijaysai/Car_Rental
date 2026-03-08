@@ -5,15 +5,27 @@ import { carsAPI, bookingsAPI } from '../api/endpoints';
 import { useAuth } from '../contexts/AuthContext';
 import { format } from 'date-fns';
 
+// Add this helper function outside and above the CarDetail component
+const getLocalISO = (offsetMins = 0) => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() + offsetMins);
+  const tzOffset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+};
+
 export default function CarDetail() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+
   const [car, setCar] = useState(null);
   const [loading, setLoading] = useState(true);
   const [bookingType, setBookingType] = useState('hourly');
-  const [hourlyStart, setHourlyStart] = useState('');
-  const [hourlyEnd, setHourlyEnd] = useState('');
+
+  // FIX 1: Default to 15 mins in the future to prevent immediate "past time" errors
+  const [hourlyStart, setHourlyStart] = useState(getLocalISO(15));
+  const [hourlyEnd, setHourlyEnd] = useState(getLocalISO(15 + 12 * 60));
+
   const [dailyStart, setDailyStart] = useState('');
   const [dailyEnd, setDailyEnd] = useState('');
   const [error, setError] = useState('');
@@ -37,8 +49,23 @@ export default function CarDetail() {
     if (hourlyStart) {
       const start = new Date(hourlyStart);
       const end = new Date(start.getTime() + 12 * 60 * 60 * 1000);
-      setHourlyEnd(end.toISOString().slice(0, 16));
+      const tzOffset = end.getTimezoneOffset() * 60000;
+      const localISOTime = new Date(end.getTime() - tzOffset).toISOString().slice(0, 16);
+
+      setHourlyEnd(localISOTime);
     }
+  };
+
+  // FIX 2: Strictly auto-set end time when start changes
+  const handleHourlyStartChange = (e) => {
+    const newStart = e.target.value;
+    setHourlyStart(newStart);
+
+    const startDate = new Date(newStart);
+    const endDate = new Date(startDate.getTime() + 12 * 60 * 60 * 1000);
+    const tzOffset = endDate.getTimezoneOffset() * 60000;
+
+    setHourlyEnd(new Date(endDate.getTime() - tzOffset).toISOString().slice(0, 16));
   };
 
   const handleSubmit = async (e) => {
@@ -61,13 +88,16 @@ export default function CarDetail() {
           setError('Please select both Pick-up and Drop-off times.');
           return;
         }
+
         const start = new Date(hourlyStart);
         const end = new Date(hourlyEnd);
         const diffHours = (end - start) / 1000 / 60 / 60;
+
         if (diffHours < 12) {
           setError('For 12-Hour Shift, the duration must be at least 12 hours.');
           return;
         }
+
         data.hourly_start = hourlyStart;
         data.hourly_end = hourlyEnd;
       } else {
@@ -75,10 +105,12 @@ export default function CarDetail() {
           setError('Please select Start and End dates.');
           return;
         }
+
         if (dailyEnd <= dailyStart) {
           setError('End date must be after Start date.');
           return;
         }
+
         data.daily_start = dailyStart;
         data.daily_end = dailyEnd;
       }
@@ -113,6 +145,7 @@ export default function CarDetail() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
         <div>
           {car.image && (
             <img
@@ -121,21 +154,26 @@ export default function CarDetail() {
               className="w-full rounded-lg shadow-lg mb-6"
             />
           )}
+
           <h4 className="font-bold mb-4 text-xl">Vehicle Features</h4>
+
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="bg-gray-50 p-4 rounded-lg text-center">
               <small className="text-gray-600 block">Transmission</small>
               <span className="font-bold">{car.transmission}</span>
             </div>
+
             <div className="bg-gray-50 p-4 rounded-lg text-center">
               <small className="text-gray-600 block">Fuel Type</small>
               <span className="font-bold">{car.fuel_type}</span>
             </div>
+
             <div className="bg-gray-50 p-4 rounded-lg text-center">
               <small className="text-gray-600 block">Passengers</small>
               <span className="font-bold">{car.seats} Seats</span>
             </div>
           </div>
+
           <div className="bg-gray-50 p-6 rounded-lg">
             <h5 className="font-bold mb-2">Description</h5>
             <p className="text-gray-600">{car.features}</p>
@@ -144,15 +182,22 @@ export default function CarDetail() {
 
         <div className="sticky top-20">
           <div className="bg-white shadow-lg rounded-lg p-6">
+
             <div className="flex justify-between items-center mb-4">
               <div>
-                <h2 className="text-2xl font-bold">{car.brand} {car.name}</h2>
+                <h2 className="text-2xl font-bold">
+                  {car.brand} {car.name}
+                </h2>
+
                 <span className="badge bg-green-500 text-white px-3 py-1 rounded-full text-sm mt-2">
                   {car.status}
                 </span>
               </div>
+
               <div className="text-right">
-                <h3 className="text-primary font-bold text-2xl">₹{car.daily_rate}</h3>
+                <h3 className="text-primary font-bold text-2xl">
+                  ₹{car.daily_rate}
+                </h3>
                 <small className="text-gray-600">/day</small>
               </div>
             </div>
@@ -171,6 +216,7 @@ export default function CarDetail() {
               >
                 ⏱️ 12-Hour Shift
               </button>
+
               <button
                 type="button"
                 onClick={() => setBookingType('daily')}
@@ -185,6 +231,7 @@ export default function CarDetail() {
             </div>
 
             <form onSubmit={handleSubmit}>
+
               {error && (
                 <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">
                   {error}
@@ -196,31 +243,32 @@ export default function CarDetail() {
                   <div className="bg-blue-50 text-blue-800 p-2 rounded-lg mb-4 text-sm">
                     <span className="font-semibold">Min duration:</span> 12 Hours
                   </div>
+
                   <div className="mb-4">
                     <label className="block text-sm font-bold text-gray-700 mb-2">
                       PICK-UP TIME
                     </label>
+
                     <input
                       type="datetime-local"
                       value={hourlyStart}
-                      onChange={(e) => {
-                        setHourlyStart(e.target.value);
-                        autoCalculateDropoff();
-                      }}
+                      min={getLocalISO(0)}
+                      onChange={handleHourlyStartChange}
                       className="w-full px-4 py-3 bg-gray-50 border-0 rounded-lg"
                       required
                     />
                   </div>
+
                   <div className="mb-4">
                     <label className="block text-sm font-bold text-gray-700 mb-2">
-                      DROP-OFF TIME
+                      DROP-OFF TIME (12-Hour Block)
                     </label>
+
                     <input
                       type="datetime-local"
                       value={hourlyEnd}
-                      onChange={(e) => setHourlyEnd(e.target.value)}
-                      min={hourlyStart}
-                      className="w-full px-4 py-3 bg-gray-50 border-0 rounded-lg"
+                      readOnly
+                      className="w-full px-4 py-3 bg-gray-200 border-0 rounded-lg text-gray-500 cursor-not-allowed"
                       required
                     />
                   </div>
@@ -230,11 +278,14 @@ export default function CarDetail() {
                   <div className="bg-blue-50 text-blue-800 p-2 rounded-lg mb-4 text-sm">
                     <span className="font-semibold">Standard Pickup:</span> 9:00 AM
                   </div>
+
                   <div className="grid grid-cols-2 gap-4 mb-4">
+
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-2">
                         START DATE
                       </label>
+
                       <input
                         type="date"
                         value={dailyStart}
@@ -243,10 +294,12 @@ export default function CarDetail() {
                         required
                       />
                     </div>
+
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-2">
                         END DATE
                       </label>
+
                       <input
                         type="date"
                         value={dailyEnd}
@@ -256,6 +309,7 @@ export default function CarDetail() {
                         required
                       />
                     </div>
+
                   </div>
                 </>
               )}
@@ -268,6 +322,7 @@ export default function CarDetail() {
                   >
                     Proceed to Booking
                   </button>
+
                   <p className="text-center text-gray-500 text-sm mt-3">
                     You won't be charged yet
                   </p>
@@ -280,9 +335,12 @@ export default function CarDetail() {
                   Login to Book
                 </a>
               )}
+
             </form>
+
           </div>
         </div>
+
       </div>
     </div>
   );

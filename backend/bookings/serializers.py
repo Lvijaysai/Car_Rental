@@ -1,8 +1,16 @@
 #bookings/serializers.py
 from rest_framework import serializers
+from django.utils import timezone
 from .models import Booking
 from fleet.serializers import CarSerializer
 from fleet.models import Car  # <--- 1. Import Car model here
+from datetime import timedelta
+
+def ensure_aware(dt):
+    if timezone.is_naive(dt):
+        return timezone.make_aware(dt)
+    return dt
+
 
 class BookingSerializer(serializers.ModelSerializer):
     car = CarSerializer(read_only=True)
@@ -33,7 +41,6 @@ class BookingSerializer(serializers.ModelSerializer):
                     'end_time': 'End time must be after start time.'
                 })
             
-            from django.utils import timezone
             if start_time < timezone.now():
                 raise serializers.ValidationError({
                     'start_time': 'Cannot book for a past date/time.'
@@ -68,10 +75,16 @@ class BookingCreateSerializer(serializers.Serializer):
             
             start = data['hourly_start']
             end = data['hourly_end']
+
+            grace_period = timezone.now() - timedelta(minutes=5)
+            if start < grace_period:
+                raise serializers.ValidationError(
+                    'Cannot book for a past date/time.'
+                )
             
-            # Check minimum 12 hours
-            duration_hours = (end - start).total_seconds() / 3600
-            if duration_hours < 12:
+            # FIX 2: Round duration to avoid floating-point precision failures (e.g., 11.999 hours)
+            duration_hours = round((end - start).total_seconds() / 3600, 2)
+            if duration_hours < 12.00:
                 raise serializers.ValidationError(
                     'Minimum booking duration is 12 hours for hourly bookings.'
                 )
@@ -91,7 +104,6 @@ class BookingCreateSerializer(serializers.Serializer):
     
     def create(self, validated_data):
         """Create booking from validated data"""
-        from django.utils import timezone
         from datetime import datetime, time
         from fleet.models import Car
         
@@ -99,8 +111,8 @@ class BookingCreateSerializer(serializers.Serializer):
         car = Car.objects.get(slug=validated_data['car_slug'])
         
         if booking_type == 'hourly':
-            start_time = timezone.make_aware(validated_data['hourly_start'])
-            end_time = timezone.make_aware(validated_data['hourly_end'])
+            start_time = ensure_aware(validated_data['hourly_start'])
+            end_time = ensure_aware(validated_data['hourly_end'])
         else:  # daily
             start_date = validated_data['daily_start']
             end_date = validated_data['daily_end']
@@ -112,8 +124,8 @@ class BookingCreateSerializer(serializers.Serializer):
                 start_dt = datetime.combine(start_date, time(9, 0, 0))
             
             end_dt = datetime.combine(end_date, start_dt.time())
-            start_time = timezone.make_aware(start_dt)
-            end_time = timezone.make_aware(end_dt)
+            start_time = ensure_aware(start_dt)
+            end_time = ensure_aware(end_dt)
         
         booking = Booking.objects.create(
             user=self.context['request'].user,

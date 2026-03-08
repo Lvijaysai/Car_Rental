@@ -129,11 +129,58 @@ class CarSerializer(serializers.ModelSerializer):
 class CarListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for car listings"""
     category_name = serializers.CharField(source='category.name', read_only=True)
+    is_available = serializers.SerializerMethodField()
+    live_status = serializers.SerializerMethodField()
+    status_color = serializers.SerializerMethodField()
     
     class Meta:
         model = Car
         fields = [
             'id', 'name', 'brand', 'slug', 'category_name',
             'daily_rate', 'twelve_hour_rate', 'transmission',
-            'fuel_type', 'seats', 'image', 'status'
+            'fuel_type', 'seats', 'image', 'status',
+            'is_available', 'live_status', 'status_color'
         ]
+
+    def _active_count_now(self, obj):
+        from django.utils import timezone
+
+        now = timezone.now()
+        return obj.bookings.filter(
+            status__in=['PENDING', 'APPROVED'],
+            start_time__lte=now,
+            end_time__gte=now
+        ).count()
+
+    def get_is_available(self, obj):
+        if obj.status == 'MAINTENANCE':
+            return False
+        if obj.status == 'RENTED':
+            return False
+        return self._active_count_now(obj) < obj.quantity
+
+    def get_live_status(self, obj):
+        if obj.status == 'MAINTENANCE':
+            return 'Under Maintenance'
+        if obj.status == 'RENTED':
+            return 'Sold Out'
+
+        active_count = self._active_count_now(obj)
+        if active_count >= obj.quantity:
+            return 'Sold Out'
+        if active_count > 0:
+            return f'{obj.quantity - active_count} Left'
+        return 'Available'
+
+    def get_status_color(self, obj):
+        if obj.status == 'MAINTENANCE':
+            return 'danger'
+        if obj.status == 'RENTED':
+            return 'secondary'
+
+        active_count = self._active_count_now(obj)
+        if active_count >= obj.quantity:
+            return 'secondary'
+        if active_count > 0:
+            return 'warning'
+        return 'success'

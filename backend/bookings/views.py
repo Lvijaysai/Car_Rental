@@ -11,10 +11,18 @@ from rest_framework.exceptions import MethodNotAllowed
 from django.db import transaction
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
+from datetime import datetime, time, timedelta
 from .models import Booking
 from .serializers import BookingSerializer, BookingCreateSerializer
 from .services import is_car_available
 from fleet.models import Car
+
+
+def ensure_aware(dt):
+    """Normalize datetime to timezone-aware for safe comparisons/storage."""
+    if timezone.is_naive(dt):
+        return timezone.make_aware(dt)
+    return dt
 
 
 class BookingViewSet(viewsets.ModelViewSet):
@@ -67,10 +75,9 @@ class BookingViewSet(viewsets.ModelViewSet):
                 
                 # Determine start and end times
                 if booking_type == 'hourly':
-                    start_time = timezone.make_aware(serializer.validated_data['hourly_start'])
-                    end_time = timezone.make_aware(serializer.validated_data['hourly_end'])
+                    start_time = ensure_aware(serializer.validated_data['hourly_start'])
+                    end_time = ensure_aware(serializer.validated_data['hourly_end'])
                 else:  # daily
-                    from datetime import datetime, time, timedelta  # <--- Make sure timedelta is imported
                     start_date = serializer.validated_data['daily_start']
                     end_date = serializer.validated_data['daily_end']
                     now_local = timezone.localtime(timezone.now())
@@ -85,8 +92,8 @@ class BookingViewSet(viewsets.ModelViewSet):
                         start_dt = datetime.combine(start_date, time(9, 0, 0))
                     
                     end_dt = datetime.combine(end_date, start_dt.time())
-                    start_time = timezone.make_aware(start_dt)
-                    end_time = timezone.make_aware(end_dt)
+                    start_time = ensure_aware(start_dt)
+                    end_time = ensure_aware(end_dt)
                 
                 # Check availability
                 if not is_car_available(car, start_time, end_time):
