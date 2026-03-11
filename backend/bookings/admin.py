@@ -5,10 +5,11 @@ from .models import Booking, ActiveBooking, BookingHistory
 
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user', 'car', 'start_time', 'end_time', 'status', 'total_price']
+    # Added coupon and discount_amount to the view
+    list_display = ['id', 'user', 'car', 'start_time', 'end_time', 'status', 'total_price', 'discount_amount', 'coupon']
     list_filter = ['status', 'created_at', 'car']
     search_fields = ['user__username', 'car__brand', 'car__name']
-    readonly_fields = ['total_price', 'created_at']
+    readonly_fields = ['total_price', 'discount_amount', 'created_at']
     
     # Register custom actions
     actions = ['approve_bookings', 'cancel_bookings', 'mark_completed']

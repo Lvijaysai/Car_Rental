@@ -112,17 +112,29 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="text-right">
+                      {parseFloat(booking.discount_amount) > 0 && (
+                        <div className="text-sm text-gray-400 line-through font-semibold mb-1">
+                          ₹{(parseFloat(booking.total_price) + parseFloat(booking.discount_amount)).toFixed(2)}
+                        </div>
+                      )}
                       <h4 className="text-primary font-bold text-2xl mb-2">
                         ₹{booking.total_price}
                       </h4>
-                      <button
-                        onClick={() => handleCancel(booking.id)}
-                        className="text-red-600 hover:text-red-800 text-sm font-semibold"
-                      >
-                        Cancel
-                      </button>
+                      {parseFloat(booking.discount_amount) > 0 && (
+                        <div className="text-xs text-green-600 font-bold mb-2 bg-green-50 px-2 py-1 rounded inline-block">
+                          Saved ₹{booking.discount_amount}
+                        </div>
+                      )}
+                      <div className="mt-1">
+                        <button
+                          onClick={() => handleCancel(booking.id)}
+                          className="text-red-600 hover:text-red-800 text-sm font-semibold"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  </div>  
                   {booking.status === 'PENDING' && (
                     <div className="mt-4 bg-yellow-50 text-yellow-800 p-3 rounded-lg text-sm">
                       ⚠️ Please call to confirm this booking.

@@ -11,4 +11,5 @@ urlpatterns = [
     path('', include('core.urls')),
     path('', include('users.urls')),
     path('', include('notifications.urls')),
+    path('', include('coupons.urls')),
 ]

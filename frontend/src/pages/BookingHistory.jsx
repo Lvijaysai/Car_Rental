@@ -74,7 +74,14 @@ export default function BookingHistory() {
                       {format(new Date(booking.start_time), 'MMM d, HH:mm')} →{' '}
                       {format(new Date(booking.end_time), 'MMM d, HH:mm')}
                     </td>
-                    <td className="px-6 py-4 font-bold">₹{booking.total_price}</td>
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-gray-900">₹{booking.total_price}</div>
+                      {parseFloat(booking.discount_amount) > 0 && (
+                        <div className="text-xs text-green-600 font-semibold mt-1">
+                          (Saved ₹{booking.discount_amount})
+                        </div>
+                      )}
+                    </td>
                     <td className="px-6 py-4">
                       <span
                         className={`inline-block px-3 py-1 rounded-full text-sm ${

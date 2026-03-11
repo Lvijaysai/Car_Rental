@@ -41,3 +41,9 @@ export const notificationsAPI = {
   markRead: (data) => apiClient.post('/api/notifications/mark_read/', data),
   markSingleRead: (id) => apiClient.post(`/api/notifications/${id}/mark_single_read/`),
 };
+
+// Coupon endpoints
+export const couponsAPI = {
+  list: () => apiClient.get('/api/coupons/'), 
+  apply: (data) => apiClient.post('/api/coupons/apply/', data),
+};

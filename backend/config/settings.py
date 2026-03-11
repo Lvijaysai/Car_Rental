@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'core',
     'users',
     'notifications',
+    'coupons',
 ]
 
 MIDDLEWARE = [

@@ -3,7 +3,8 @@ from rest_framework import serializers
 from django.utils import timezone
 from .models import Booking
 from fleet.serializers import CarSerializer
-from fleet.models import Car  # <--- 1. Import Car model here
+from fleet.models import Car
+from coupons.models import Coupon
 from datetime import timedelta
 
 def ensure_aware(dt):
@@ -26,9 +27,9 @@ class BookingSerializer(serializers.ModelSerializer):
         model = Booking
         fields = [
             'id', 'user', 'car', 'car_id', 'start_time', 'end_time',
-            'total_price', 'status', 'status_display', 'created_at'
+            'total_price', 'discount_amount', 'status', 'status_display', 'created_at'
         ]
-        read_only_fields = ['user', 'total_price', 'created_at']
+        read_only_fields = ['user', 'total_price', 'discount_amount', 'created_at']
     
     def validate(self, data):
         """Validate booking times"""
@@ -64,6 +65,8 @@ class BookingCreateSerializer(serializers.Serializer):
     daily_start = serializers.DateField(required=False)
     daily_end = serializers.DateField(required=False)
     
+    coupon_code = serializers.CharField(required=False, allow_blank=True)
+
     def validate(self, data):
         booking_type = data.get('booking_type')
         
@@ -99,7 +102,21 @@ class BookingCreateSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     'End date must be after start date.'
                 )
-        
+        coupon_code = data.get('coupon_code')
+        if coupon_code:
+            now = timezone.now()
+            exists = Coupon.objects.filter(
+                code__iexact=coupon_code,
+                active=True,
+                valid_from__lte=now,
+                valid_to__gte=now
+            ).exists()
+            
+            if not exists:
+                raise serializers.ValidationError({
+                    'coupon_code': 'Invalid or expired coupon code.'
+                })
+            
         return data
     
     def create(self, validated_data):
@@ -110,6 +127,11 @@ class BookingCreateSerializer(serializers.Serializer):
         booking_type = validated_data['booking_type']
         car = Car.objects.get(slug=validated_data['car_slug'])
         
+        coupon_code = validated_data.get('coupon_code')
+        coupon = None
+        if coupon_code:
+            coupon = Coupon.objects.filter(code__iexact=coupon_code).first()
+
         if booking_type == 'hourly':
             start_time = ensure_aware(validated_data['hourly_start'])
             end_time = ensure_aware(validated_data['hourly_end'])
@@ -132,7 +154,8 @@ class BookingCreateSerializer(serializers.Serializer):
             car=car,
             start_time=start_time,
             end_time=end_time,
-            status='PENDING'
+            status='PENDING',
+            coupon=coupon
         )
         
         return booking

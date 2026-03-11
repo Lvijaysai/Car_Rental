@@ -16,7 +16,7 @@ from .models import Booking
 from .serializers import BookingSerializer, BookingCreateSerializer
 from .services import is_car_available
 from fleet.models import Car
-
+from coupons.models import Coupon
 
 def ensure_aware(dt):
     """Normalize datetime to timezone-aware for safe comparisons/storage."""
@@ -66,6 +66,9 @@ class BookingViewSet(viewsets.ModelViewSet):
             car_slug = serializer.validated_data['car_slug']
             booking_type = serializer.validated_data['booking_type']
             
+            # --- NEW: Extract the validated coupon code ---
+            coupon_code = serializer.validated_data.get('coupon_code')
+            
             # Get car with lock
             with transaction.atomic():
                 car = get_object_or_404(
@@ -83,11 +86,8 @@ class BookingViewSet(viewsets.ModelViewSet):
                     now_local = timezone.localtime(timezone.now())
                     
                     if start_date == now_local.date():
-                        # --- FIX START: Add 2 minute buffer ---
-                        # This prevents "Cannot book in past" error if code runs slow
                         future_now = now_local + timedelta(minutes=2)
                         start_dt = datetime.combine(start_date, future_now.time())
-                        # --- FIX END ---
                     else:
                         start_dt = datetime.combine(start_date, time(9, 0, 0))
                     
@@ -102,29 +102,33 @@ class BookingViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
                 
+                # --- NEW: Fetch the actual Coupon object if a code was provided ---
+                coupon = None
+                if coupon_code:
+                    coupon = Coupon.objects.filter(code__iexact=coupon_code).first()
+                
                 # Create booking
                 booking = Booking.objects.create(
                     user=request.user,
                     car=car,
                     start_time=start_time,
                     end_time=end_time,
-                    status='PENDING'
+                    status='PENDING',
+                    coupon=coupon  # <--- NEW: Attach the coupon here!
                 )
             
             return Response(
                 BookingSerializer(booking).data,
                 status=status.HTTP_201_CREATED
             )
-        
+            
         except Car.DoesNotExist:
             return Response({'error': 'Car not found.'}, status=status.HTTP_404_NOT_FOUND)
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        # --- FIX START: Catch the Validation Error ---
         except ValidationError as e:
             return Response({'error': e.messages}, status=status.HTTP_400_BAD_REQUEST)
-        # --- FIX END ---
-    
+            
     @action(detail=True, methods=['post'], url_path='cancel')
     def cancel_booking(self, request, pk=None):
         """Cancel a booking"""

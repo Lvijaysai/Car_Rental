@@ -1,9 +1,8 @@
 // frontend/src/pages/CarDetail.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { carsAPI, bookingsAPI } from '../api/endpoints';
+import { carsAPI, bookingsAPI, couponsAPI } from '../api/endpoints';
 import { useAuth } from '../contexts/AuthContext';
-import { format } from 'date-fns';
 
 // Add this helper function outside and above the CarDetail component
 const getLocalISO = (offsetMins = 0) => {
@@ -25,14 +24,30 @@ export default function CarDetail() {
   // FIX 1: Default to 15 mins in the future to prevent immediate "past time" errors
   const [hourlyStart, setHourlyStart] = useState(getLocalISO(15));
   const [hourlyEnd, setHourlyEnd] = useState(getLocalISO(15 + 12 * 60));
-
   const [dailyStart, setDailyStart] = useState('');
   const [dailyEnd, setDailyEnd] = useState('');
   const [error, setError] = useState('');
 
+  // --- NEW: Coupon State ---
+  const [couponCode, setCouponCode] = useState('');
+  const [discountPercentage, setDiscountPercentage] = useState(0);
+  const [couponMessage, setCouponMessage] = useState('');
+  const [couponError, setCouponError] = useState('');
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+
   useEffect(() => {
     fetchCar();
+    fetchCoupons();
   }, [slug]);
+
+  const fetchCoupons = async () => {
+    try {
+      const response = await couponsAPI.list();
+      setAvailableCoupons(response.data);
+    } catch (error) {
+      console.error('Error fetching coupons:', error);
+    }
+  };
 
   const fetchCar = async () => {
     try {
@@ -68,6 +83,31 @@ export default function CarDetail() {
     setHourlyEnd(new Date(endDate.getTime() - tzOffset).toISOString().slice(0, 16));
   };
 
+  // --- NEW: Handle Coupon Validation ---
+  const handleApplyCoupon = async () => {
+    setCouponError('');
+    setCouponMessage('');
+    
+    if (!couponCode.trim()) {
+      setCouponError('Please enter a code first.');
+      return;
+    }
+
+    if (!isAuthenticated) {
+      setCouponError('Please login to apply coupons.');
+      return;
+    }
+
+    try {
+      const response = await couponsAPI.apply({ code: couponCode });
+      setDiscountPercentage(response.data.discount_percentage);
+      setCouponMessage(response.data.message);
+    } catch (err) {
+      setCouponError(err.response?.data?.error || 'Invalid coupon.');
+      setDiscountPercentage(0);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -82,6 +122,10 @@ export default function CarDetail() {
         car_slug: slug,
         booking_type: bookingType,
       };
+
+      if (discountPercentage > 0) {
+        data.coupon_code = couponCode;
+      }
 
       if (bookingType === 'hourly') {
         if (!hourlyStart || !hourlyEnd) {
@@ -124,6 +168,15 @@ export default function CarDetail() {
         'Booking failed. Please try again.'
       );
     }
+  };
+
+  // Calculate dynamic price display
+  const getDisplayPrice = () => {
+    const basePrice = bookingType === 'hourly' ? car.twelve_hour_rate : car.daily_rate;
+    if (discountPercentage > 0) {
+      return (basePrice - (basePrice * discountPercentage) / 100).toFixed(2);
+    }
+    return basePrice;
   };
 
   if (loading) {
@@ -189,16 +242,24 @@ export default function CarDetail() {
                   {car.brand} {car.name}
                 </h2>
 
-                <span className="badge bg-green-500 text-white px-3 py-1 rounded-full text-sm mt-2">
+                <span className="badge bg-green-500 text-white px-3 py-1 rounded-full text-sm mt-2 inline-block">
                   {car.status}
                 </span>
               </div>
 
+              {/* Updated Price Display to handle strikethrough logic */}
               <div className="text-right">
-                <h3 className="text-primary font-bold text-2xl">
-                  ₹{car.daily_rate}
+                {discountPercentage > 0 && (
+                  <div className="text-gray-400 line-through text-lg font-bold">
+                    ₹{bookingType === 'hourly' ? car.twelve_hour_rate : car.daily_rate}
+                  </div>
+                )}
+                <h3 className="text-primary font-bold text-3xl">
+                  ₹{getDisplayPrice()}
                 </h3>
-                <small className="text-gray-600">/day</small>
+                <small className="text-gray-600">
+                  /{bookingType === 'hourly' ? '12-hours' : 'day'}
+                </small>
               </div>
             </div>
 
@@ -233,7 +294,7 @@ export default function CarDetail() {
             <form onSubmit={handleSubmit}>
 
               {error && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">
+                <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm font-semibold">
                   {error}
                 </div>
               )}
@@ -254,7 +315,7 @@ export default function CarDetail() {
                       value={hourlyStart}
                       min={getLocalISO(0)}
                       onChange={handleHourlyStartChange}
-                      className="w-full px-4 py-3 bg-gray-50 border-0 rounded-lg"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg"
                       required
                     />
                   </div>
@@ -268,7 +329,7 @@ export default function CarDetail() {
                       type="datetime-local"
                       value={hourlyEnd}
                       readOnly
-                      className="w-full px-4 py-3 bg-gray-200 border-0 rounded-lg text-gray-500 cursor-not-allowed"
+                      className="w-full px-4 py-3 bg-gray-200 border border-gray-200 rounded-lg text-gray-500 cursor-not-allowed"
                       required
                     />
                   </div>
@@ -280,7 +341,6 @@ export default function CarDetail() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 mb-4">
-
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-2">
                         START DATE
@@ -290,7 +350,7 @@ export default function CarDetail() {
                         type="date"
                         value={dailyStart}
                         onChange={(e) => setDailyStart(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-50 border-0 rounded-lg"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg"
                         required
                       />
                     </div>
@@ -305,20 +365,66 @@ export default function CarDetail() {
                         value={dailyEnd}
                         onChange={(e) => setDailyEnd(e.target.value)}
                         min={dailyStart}
-                        className="w-full px-4 py-3 bg-gray-50 border-0 rounded-lg"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg"
                         required
                       />
                     </div>
-
                   </div>
                 </>
               )}
+
+              {/* --- Promo Code UI Section --- */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <label className="block text-sm font-bold text-gray-700 mb-2">HAVE A PROMO CODE?</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="Enter code"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    disabled={discountPercentage > 0}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    disabled={discountPercentage > 0}
+                    className="bg-gray-800 text-white px-4 py-2 rounded-lg font-bold hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                  >
+                    {discountPercentage > 0 ? 'Applied' : 'Apply'}
+                  </button>
+                </div>
+                
+                {couponMessage && <p className="text-green-600 text-sm mt-2 font-semibold">✓ {couponMessage}</p>}
+                {couponError && <p className="text-red-600 text-sm mt-2 font-semibold">✗ {couponError}</p>}
+
+                {/* --- NEW: Available Coupons List --- */}
+                {availableCoupons.length > 0 && discountPercentage === 0 && (
+                  <div className="mt-4 border-t border-gray-200 pt-3">
+                    <p className="text-xs text-gray-500 font-bold mb-2">AVAILABLE OFFERS:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {availableCoupons.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setCouponCode(c.code)}
+                          className="text-xs bg-white border border-dashed border-primary text-primary px-3 py-1.5 rounded hover:bg-blue-50 transition-colors"
+                        >
+                          <span className="font-bold">{c.code}</span> ({c.discount_percentage}% OFF)
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* ----------------------------------- */}
+              </div>
+              {/* --------------------------------- */}
 
               {isAuthenticated ? (
                 <>
                   <button
                     type="submit"
-                    className="w-full bg-primary text-white py-3 rounded-lg font-bold hover:bg-blue-600 shadow-lg mt-2"
+                    className="w-full bg-primary text-white py-4 rounded-lg font-bold text-lg hover:bg-blue-600 shadow-lg mt-2 transition-colors"
                   >
                     Proceed to Booking
                   </button>
@@ -330,7 +436,7 @@ export default function CarDetail() {
               ) : (
                 <a
                   href={`/login?next=/cars/${slug}`}
-                  className="block w-full bg-yellow-500 text-white py-3 rounded-lg font-bold hover:bg-yellow-600 shadow-lg mt-2 text-center"
+                  className="block w-full bg-yellow-500 text-white py-4 rounded-lg font-bold text-lg hover:bg-yellow-600 shadow-lg mt-2 text-center transition-colors"
                 >
                   Login to Book
                 </a>

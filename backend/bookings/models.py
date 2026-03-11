@@ -7,6 +7,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from fleet.models import Car
+from coupons.models import Coupon
+from decimal import Decimal
 import math
 
 
@@ -42,6 +44,9 @@ class Booking(models.Model):
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
 
+    coupon = models.ForeignKey(Coupon, on_delete=models.SET_NULL, null=True, blank=True, related_name='bookings')
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
     # Store price in DB so it doesn't change if car rates change later
     total_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
@@ -52,7 +57,11 @@ class Booking(models.Model):
         if self.start_time and self.end_time:
             if self.start_time >= self.end_time:
                 raise ValidationError("End time must be after start time.")
-            if not self.pk and self.start_time < timezone.now():
+            
+            from datetime import timedelta
+            grace_period = timezone.now() - timedelta(minutes=5)
+
+            if not self.pk and self.start_time < grace_period:
                 raise ValidationError("Cannot book a car in the past.")
     # Override the default save method to calculate price automatically
     def save(self, *args, **kwargs):
@@ -79,14 +88,24 @@ class Booking(models.Model):
             # FIXED: Proper indentation and logic flow
             if total_hours <= 12:
                 # Case A: use the 12 hour price from DB
-                self.total_price = self.car.twelve_hour_rate
+                base_price = self.car.twelve_hour_rate
             elif total_hours <= 24:
                 # Case B: use the 24 hours price from DB
-                self.total_price = self.car.daily_rate
+                base_price = self.car.daily_rate
             else:
                 # Case C: multi-day 
                 days = math.ceil(total_hours / 24)
-                self.total_price = days * self.car.daily_rate
+                base_price = days * self.car.daily_rate
+
+            # 2. Apply Coupon Logic
+            if self.coupon and self.coupon.is_valid:
+                # Calculate discount and subtract it from the base price
+                discount = (base_price * Decimal(self.coupon.discount_percentage)) / Decimal('100.00')
+                self.discount_amount = discount
+                self.total_price = base_price - discount
+            else:
+                self.discount_amount = 0
+                self.total_price = base_price    
         
         super().save(*args, **kwargs)
 
